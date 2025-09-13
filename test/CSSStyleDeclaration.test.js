@@ -5,9 +5,8 @@ const assert = require("node:assert/strict");
 const { CSSStyleDeclaration } = require("../lib/CSSStyleDeclaration");
 
 describe("CSSStyleDeclaration", () => {
-  it("does not enumerate constructor or internals", () => {
+  it("does not enumerate internals", () => {
     const style = new CSSStyleDeclaration();
-    assert.strictEqual(Object.getOwnPropertyDescriptor(style, "constructor").enumerable, false);
     for (const i in style) {
       assert.strictEqual(i.startsWith("_"), false);
     }
@@ -31,51 +30,23 @@ describe("CSSStyleDeclaration", () => {
     assert.ok(style.__lookupGetter__("parentRule"));
   });
 
-  it("sets internals for Window", () => {
+  it("sets internals for Element", () => {
     const window = {
-      getComputedStyle: () => {},
       DOMException: globalThis.DOMException
     };
-    const style = new CSSStyleDeclaration(window);
-    assert.throws(
-      () => {
-        style.cssText = "color: green;";
-      },
-      (e) => {
-        assert.strictEqual(e instanceof window.DOMException, true);
-        assert.strictEqual(e.name, "NoModificationAllowedError");
-        assert.strictEqual(e.message, "cssText can not be modified.");
-        return true;
-      }
-    );
-    assert.throws(
-      () => {
-        style.removeProperty("color");
-      },
-      (e) => {
-        assert.strictEqual(e instanceof window.DOMException, true);
-        assert.strictEqual(e.name, "NoModificationAllowedError");
-        assert.strictEqual(e.message, "Property color can not be modified.");
-        return true;
-      }
-    );
-  });
-
-  it("sets internals for Element", () => {
     const node = {
       nodeType: 1,
       style: {},
       ownerDocument: {
-        defaultView: {
-          DOMException: globalThis.DOMException
-        }
+        defaultView: window
       }
     };
     let callCount = 0;
     const callback = () => {
       callCount++;
     };
-    const style = new CSSStyleDeclaration(node, {
+    const style = new CSSStyleDeclaration(window, {
+      context: node,
       onChange: callback
     });
     style.cssText = "color: green;";
@@ -83,17 +54,22 @@ describe("CSSStyleDeclaration", () => {
   });
 
   it("sets internals for CSSRule", () => {
+    const window = {
+      DOMException: globalThis.DOMException
+    };
     const rule = {
       parentRule: {},
       parentStyleSheet: {
         ownerDocument: {
           defaultView: {
-            DOMException: globalThis.DOMException
+            DOMException: window.DOMException
           }
         }
       }
     };
-    const style = new CSSStyleDeclaration(rule);
+    const style = new CSSStyleDeclaration(window, {
+      context: rule
+    });
     assert.deepEqual(style.parentRule, rule);
   });
 
@@ -116,35 +92,19 @@ describe("CSSStyleDeclaration", () => {
     });
   });
 
-  it("getting cssText() returns empty string if computedflag is set", () => {
+  it("getting cssText returns empty string if computedflag is set", () => {
     const window = {
       getComputedStyle: () => {},
       DOMException: globalThis.DOMException
     };
-    const style = new CSSStyleDeclaration(window);
+    const style = new CSSStyleDeclaration(window, {
+      format: "computedValue"
+    });
+    style.cssText = "color: red;";
     assert.strictEqual(style.cssText, "");
   });
 
-  it("setting cssText() throws if readonly flag is set", () => {
-    const window = {
-      getComputedStyle: () => {},
-      DOMException: globalThis.DOMException
-    };
-    const style = new CSSStyleDeclaration(window);
-    assert.throws(
-      () => {
-        style.cssText = "color: green;";
-      },
-      (e) => {
-        assert.strictEqual(e instanceof window.DOMException, true);
-        assert.strictEqual(e.name, "NoModificationAllowedError");
-        assert.strictEqual(e.message, "cssText can not be modified.");
-        return true;
-      }
-    );
-  });
-
-  it("setting improper css to csstext should not throw", () => {
+  it("setting improper css to cssText should not throw", () => {
     const style = new CSSStyleDeclaration();
     style.cssText = "color: ";
     assert.strictEqual(style.cssText, "");
@@ -199,5 +159,42 @@ describe("CSSStyleDeclaration", () => {
     style["--baz"] = "yellow";
 
     assert.strictEqual(style.getPropertyValue("--baz"), "");
+  });
+
+  it("getPropertyPriority for property", () => {
+    const style = new CSSStyleDeclaration();
+    style.setProperty("color", "green", "important");
+    assert.strictEqual(style.getPropertyPriority("color"), "important");
+  });
+
+  it("getPropertyPriority for custom property", () => {
+    const style = new CSSStyleDeclaration();
+    style.setProperty("--foo", "green", "important");
+    assert.strictEqual(style.getPropertyPriority("--foo"), "important");
+  });
+
+  it("removeProperty throws if readonly flag is set", () => {
+    const window = {
+      getComputedStyle: () => {},
+      DOMException: globalThis.DOMException
+    };
+    const style = new CSSStyleDeclaration(window);
+    assert.strictEqual(style.readOnly, false);
+    style.setProperty("--foo", "green");
+    style.setProperty("--bar", "red");
+    assert.strictEqual(style.removeProperty("--foo"), "green");
+    style.readOnly = true;
+    assert.strictEqual(style.readOnly, true);
+    assert.throws(
+      () => {
+        style.removeProperty("--bar");
+      },
+      (e) => {
+        assert.strictEqual(e instanceof window.DOMException, true);
+        assert.strictEqual(e.name, "NoModificationAllowedError");
+        assert.strictEqual(e.message, "Property --bar can not be modified.");
+        return true;
+      }
+    );
   });
 });
