@@ -19,7 +19,6 @@ const propertyFiles = await fs.readdir(path.resolve(dirname, "../lib/properties"
 const implementedProperties = new Map(propertyFiles.map((file) => [file.replace(/\.js$/, ""), file]));
 
 const caseSensitiveTypes = ["custom-ident", "dashed-ident", "string"];
-const functionTypes = ["color", "image"];
 const dimensionTypes = [
   "angle",
   "angle-percentage",
@@ -35,7 +34,8 @@ const dimensionTypes = [
   "time",
   "time-percentage"
 ];
-const typeList = new Set([...caseSensitiveTypes, ...functionTypes, ...dimensionTypes]);
+const functionTypes = ["color", "image"];
+const typeList = new Set([...caseSensitiveTypes, ...dimensionTypes, ...functionTypes]);
 
 await Promise.all([generateDefinitions(), generateDescriptors()]);
 
